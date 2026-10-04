@@ -1,18 +1,21 @@
 # Fluorómetro de clorofila de bajo costo para plantas 
 
-:rocket: Saber qué tan bien una planta aprovecha la luz no debería requerir un equipo comercial costoso. La fluorescencia de la clorofila *a* es el método más usado para estudiar fotosíntesis y estrés vegetal y puede delatar daño fisiológico antes de que aparezcan síntomas visibles [3], pero el costo del instrumento limita su acceso. Open-JIP demostró que un fluorómetro OJIP abierto, de entre 50 y 100 USD, es posible. Nosotros partimos de su versión para plantas y la llevamos más lejos: mejorar la cadena de detección, reducir la variabilidad entre unidades y validarla contra un equipo comercial, con todo documentado en este repositorio.
+Saber qué tan bien una planta aprovecha la luz no debería requerir un equipo comercial costoso. La fluorescencia de la clorofila *a* es el método más usado para estudiar fotosíntesis y estrés vegetal y puede delatar daño fisiológico antes de que aparezcan síntomas visibles [3], pero el costo del instrumento limita su acceso. Open-JIP demostró que un fluorómetro OJIP abierto, de entre 50 y 100 USD, es posible. Nosotros partimos de su versión para plantas y la llevamos más lejos: excitar con un láser azul de 450 nm, mejorar la cadena de detección, reducir la variabilidad entre unidades y validar el equipo en hojas contra un instrumento comercial, con todo documentado en este repositorio.
 
 ## 1. Contexto y problemática
 
-La fluorescencia de la clorofila permite evaluar fotosíntesis y estrés vegetal sin destruir la muestra [1, 3]. Su principal limitante de acceso es el costo del instrumento, y el hardware abierto es una alternativa viable [32].
+La fluorescencia de la clorofila permite evaluar fotosíntesis y estrés vegetal sin destruir la muestra [1, 3]. Su principal limitante de acceso es el costo del instrumento, y el hardware abierto es una alternativa viable [2].
 
 **Proyecto base: Open-JIP (versión para plantas).** Open-JIP es un fluorómetro abierto basado en la curva de inducción de Kautsky (OJIP), construido con componentes de bajo costo, impresión 3D y un microcontrolador abierto (Arduino Mega); existen dos configuraciones, una para plantas superiores y otra para microalgas [1]. La versión para plantas usa un LED COB de 10 W a 466 nm, un fotodiodo PIN BPW24R con filtro pasa-largo de 695 nm y un amplificador LM358, con un costo de 50 a 100 USD. **En este proyecto solo trabajamos el caso de plantas; la configuración para algas queda fuera de alcance.**
 
 **Limitaciones reportadas en el estudio de Open-JIP [1]:**
 
-- Usa un ADC de 10 bits, frente a los 12–16 bits de los equipos comerciales.
-- Falta al menos un equipo comercial para calibración cruzada. La validación contra el FL3500 (PSI) que recoge nuestro estado del arte se hizo con *Chlorella vulgaris* y *Synechococcus* sp., no con hojas de plantas.
-- La variabilidad entre unidades proviene del cableado y de las marcas de los componentes.
+- **Señaladas por los autores [1].**
+  - Hace falta al menos un equipo comercial para la calibración cruzada.
+  - La variabilidad entre unidades proviene del cableado y de las marcas de los componentes.
+- **Identificadas por nosotros.**
+  - La validación contra el FL3500 (PSI) se hizo con *Chlorella vulgaris* y *Synechococcus* sp., no con hojas de plantas.
+  - Usa un ADC de 10 bits, frente a los 12–16 bits de los equipos comerciales. Los autores muestran que bastó para resolver los transitorios, pero limita la resolución de F₀ y el rango dinámico.
 
 ## 2. Qué queremos hacer :rocket:
 
