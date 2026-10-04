@@ -1,5 +1,5 @@
 ## FLUOROMETRO DE BAJO COSTO
-El fin de este proyecto es el diseno y construccion de fluorometro de bajo costo con el fin de analizar el correcto de las plantas.
+El fin de este proyecto es el diseno y construccion de fluorometro de bajo costo con el fin de analizar el correcto crecimiento de las plantas.
 
 ## Problematica:
 -----
