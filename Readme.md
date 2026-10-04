@@ -29,10 +29,10 @@ La fluorescencia de la clorofila permite evaluar fotosíntesis y estrés vegetal
 
 ## 5. Antecedentes relacionados
 
-- **PAM de muy bajo costo** (< 300 USD): fotodiodo de avalancha, láser de 405 nm e integrador conmutado; frente a un Junior-PAM, ΦPSII correlacionó con pendiente 1.03 y R² = 0.87 [2].
-- **Imagen de fluorescencia de bajo costo** con cámara monocromática y LEDs azules [3].
-- **Realimentación de iluminación en agricultura de ambiente controlado** usando la fluorescencia como variable de control, hasta ahora con fluorómetros comerciales [28, 29].
-- **Modelos livianos de aprendizaje automático** para detectar o clasificar estrés a partir de curvas de fluorescencia [30, 31]. Son compatibles con un fluorómetro que registra de forma autónoma.
+- **PAM de muy bajo costo** (< 300 USD): fotodiodo de avalancha, láser de 405 nm e integrador conmutado; frente a un Junior-PAM, ΦPSII correlacionó con pendiente 1.03 y R² = 0.87.
+- **Imagen de fluorescencia de bajo costo** con cámara monocromática y LEDs azules.
+- **Realimentación de iluminación en agricultura de ambiente controlado** usando la fluorescencia como variable de control, hasta ahora con fluorómetros comerciales.
+- **Modelos livianos de aprendizaje automático** para detectar o clasificar estrés a partir de curvas de fluorescencia. Son compatibles con un fluorómetro que registra de forma autónoma.
 
 ## Miembros y Roles :rocket:
 -----
@@ -40,7 +40,7 @@ La fluorescencia de la clorofila permite evaluar fotosíntesis y estrés vegetal
 | Photo | Name | Role | 
 | :---: | :---: | :---: |
 |<img src="Resources/Images-members/Jose-Vilchez.jpeg" width="200"> | Jose Ignacio Vilchez Cayetano | Responsable del Área Óptica|
-|Image 2  | Cadney Veliana Condor | Responsable del Area de InstrumentaciÓn|
+|Image 2  | Cadney Veliana Condor | Responsable del Area de Instrumentación|
 |<img src="Resources/Images-members/Ivan-Prudencio.jpeg" width="200"> | Ivan Esteban Prudencio Ramos | Responsable del Área de Procesamiento y visualización de datos|
 |Image 4 | Martin Rivas | Responsable del Área Mecánica|
 
