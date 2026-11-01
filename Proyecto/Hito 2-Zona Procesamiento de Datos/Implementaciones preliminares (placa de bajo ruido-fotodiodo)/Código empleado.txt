@@ -1,0 +1,176 @@
+/*
+  fotodiodo_esp32s3_v3.ino
+  Lectura del modulo "Very Low Noise Large Area Photodiode" (Hamamatsu S1227-1010BQ)
+  con ESP32-S3-DevKitC-1.
+
+  Circuito:
+    Fuente 12 V  -> bornera PWR de la placa (limite CC 50-80 mA)
+    OUT placa --[R1 = 10k]--+--> GPIO2 (ADC1_CH1)
+                            |
+                         [R2 = 10k]   [C = 10 nF]
+                            |             |
+    GND placa ------------- +-------------+--> GND ESP32 (y GND de la fuente)
+    ESP32 alimentado por USB. Sin diodos Schottky de proteccion (pendiente).
+
+  Calibracion de 2 puntos (multimetro UNI-T UT61D+ y ESP32 simultaneos, 31-oct-2026):
+    - Saturacion en OUT con divisor:  4.718 V  <->  V_adc = 2.3470 V
+    - Nivel bajo estable en OUT:      0.100 V  <->  V_adc = 0.0258 V
+    - Saturacion en OUT sin carga:    4.97 V   -> resistencia serie R6 = ~1 kOhm (confirmado)
+    El ADC lee ~24 mV de menos en el pin y marca ~0 por debajo de eso:
+    con OUT < ~0.05 V la lectura NO es valida (estado = 2).
+
+  Salida serie (CSV, 115200 baudios):
+    t_ms, V_adc, V_out, V_tia, V_neta, I_nA, est
+      V_adc  : voltaje en el pin del ESP32
+      V_out  : voltaje en la bornera OUT (lo que mide el multimetro con el divisor puesto)
+      V_tia  : voltaje del amplificador sin la caida en R6 (proporcional a la fotocorriente)
+      V_neta : V_tia menos el offset de oscuridad
+      I_nA   : fotocorriente neta en nA (V_neta / Rf; Rf = 1 MOhm -> 1 mV = 1 nA)
+      est    : 0 = valida | 1 = placa saturada | 2 = bajo el rango del ADC (OUT < ~0.05 V)
+
+  Comandos por el monitor serie:
+    d  -> guarda offset de oscuridad desde el ESP32 (promedio del ultimo ~1 s).
+          OJO: la oscuridad real (30 mV en OUT) esta en la zona muerta del ADC,
+          asi que normalmente conviene usar el valor fijo medido con multimetro.
+    r  -> vuelve al offset medido con multimetro (V_DARK_OUT_MM)
+    z  -> pone el offset en 0
+    +  -> muestrea mas rapido (minimo 20 ms)
+    -  -> muestrea mas lento (maximo 2000 ms)
+    i  -> imprime la configuracion actual
+*/
+
+// ------------------------- Hardware -------------------------
+const int   PIN_PD = 2;      // GPIO2 = ADC1_CH1 (funciona con WiFi activo)
+const float R1_K   = 10.0;   // kOhm, OUT -> pin   (cambiar a 8.2 si usas 8.2k)
+const float R2_K   = 10.0;   // kOhm, pin -> GND
+
+// Resistencia serie de la salida de la placa (R6). Medido: 20k x (4.97/4.718 - 1) = 1.07k
+const float R_SERIE_K = 1.0;
+
+// Resistencia de realimentacion del amplificador (SMD codigo 1004 = 1 MOhm)
+const float RF_MOHM = 1.0;
+
+// ------------------------- Calibracion -------------------------
+// V_out = A_CAL * V_adc + B_CAL   (incluye divisor, error de ganancia y offset del ADC)
+// Si cambias R1 o R2, repite la calibracion de 2 puntos.
+float A_CAL = 1.9894;        // V/V  (nominal 2.0 con 10k/10k)
+float B_CAL = 0.0488;        // V    (compensa los ~24 mV que el ADC lee de menos en el pin)
+
+const float V_SAT_OUT  = 4.69;   // umbral de saturacion en OUT (saturacion real: 4.718 V)
+const float V_ADC_MIN  = 0.001;  // por debajo, el ADC esta en su zona muerta
+
+// Oscuridad medida con multimetro en OUT, fotodiodo tapado (31-oct-2026).
+// Esta por debajo de la zona muerta del ADC, por eso se fija a mano.
+const float V_DARK_OUT_MM = 0.030;   // V
+
+// ------------------------- Adquisicion -------------------------
+const uint32_t VENTANA_US     = 16667; // 2 ciclos de 120 Hz -> cancela el parpadeo de las luces
+const uint32_t PERIODO_MIN_MS = 20;    // la ventana dura ~17 ms; no bajar de 20 ms
+uint32_t periodo_ms = 20;              // 50 lecturas/s
+
+// Buffer circular del ultimo ~1 s de V_tia (para el offset de oscuridad)
+const int NBUF = 50;
+float buf[NBUF];
+uint8_t bufEst[NBUF];
+int  ibuf = 0;
+bool buf_lleno = false;
+
+// ------------------------- Derivados -------------------------
+const float K_CARGA = (R1_K + R2_K + R_SERIE_K) / (R1_K + R2_K); // 1.05 con 10k/10k
+
+float v_dark = 0.0;   // offset en V_tia; se inicializa en setup()
+uint32_t t_prev = 0;
+uint32_t n_ultima = 0;   // lecturas promediadas en la ultima ventana (diagnostico)
+
+// Promedia todas las lecturas posibles durante VENTANA_US. Devuelve V en el pin.
+float leerVadc() {
+  uint32_t t0 = micros();
+  uint32_t acc = 0, n = 0;
+  while (micros() - t0 < VENTANA_US) {
+    acc += analogReadMilliVolts(PIN_PD);   // mV con la calibracion de fabrica del chip
+    n++;
+  }
+  n_ultima = n;
+  return (acc / (float)n) / 1000.0;
+}
+
+void imprimirConfig() {
+  Serial.println("# ---- Configuracion ----");
+  Serial.printf("# PIN: GPIO%d | R1 = %.2fk | R2 = %.2fk\n", PIN_PD, R1_K, R2_K);
+  Serial.printf("# A_CAL = %.4f | B_CAL = %.4f V | K_CARGA = %.4f\n", A_CAL, B_CAL, K_CARGA);
+  Serial.printf("# Periodo = %lu ms | ventana = %lu us | lecturas/ventana = %lu\n",
+                (unsigned long)periodo_ms, (unsigned long)VENTANA_US, (unsigned long)n_ultima);
+  Serial.printf("# Offset de oscuridad = %.5f V\n", v_dark);
+  Serial.printf("# Rf = %.3f MOhm | I_sat aprox = %.0f nA\n", RF_MOHM, 4.97 / RF_MOHM * 1000.0);
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(1500);                                  // tiempo para abrir el monitor serie
+  analogReadResolution(12);
+  analogSetPinAttenuation(PIN_PD, ADC_11db);    // atenuacion maxima, rango ~0-3.1 V
+  pinMode(PIN_PD, INPUT);
+  v_dark = V_DARK_OUT_MM * K_CARGA;             // 0.0315 V en el amplificador (~31.5 nA)
+
+  Serial.println("# Fotodiodo + ESP32-S3 listo (v3)");
+  Serial.println("# Comandos: d=offset desde ESP32, r=offset del multimetro, z=offset 0, +/- = velocidad, i=config");
+  leerVadc();                                   // descarta la primera ventana
+  imprimirConfig();
+  Serial.println("t_ms,V_adc,V_out,V_tia,V_neta,I_nA,est");
+}
+
+void loop() {
+  // ---- Comandos ----
+  if (Serial.available()) {
+    char c = Serial.read();
+    if (c == 'd') {
+      int n = buf_lleno ? NBUF : ibuf;
+      if (n > 0) {
+        float acc = 0;
+        int nBajo = 0;
+        for (int i = 0; i < n; i++) { acc += buf[i]; if (bufEst[i] == 2) nBajo++; }
+        v_dark = acc / n;
+        Serial.printf("# Offset de oscuridad guardado: %.5f V (%d muestras)\n", v_dark, n);
+        if (nBajo > 0)
+          Serial.printf("# AVISO: %d muestras bajo el rango del ADC; la oscuridad real es <= ~0.05 V y este offset no es exacto\n", nBajo);
+      } else {
+        Serial.println("# Aun no hay muestras para el offset");
+      }
+    } else if (c == 'r') {
+      v_dark = V_DARK_OUT_MM * K_CARGA;
+      Serial.printf("# Offset del multimetro restaurado: %.5f V\n", v_dark);
+    } else if (c == 'z') {
+      v_dark = 0.0;
+      Serial.println("# Offset en 0");
+    } else if (c == '+') {
+      periodo_ms = max(PERIODO_MIN_MS, periodo_ms / 2);
+      Serial.printf("# Periodo: %lu ms\n", (unsigned long)periodo_ms);
+    } else if (c == '-') {
+      if (periodo_ms < 2000) periodo_ms *= 2;
+      Serial.printf("# Periodo: %lu ms\n", (unsigned long)periodo_ms);
+    } else if (c == 'i') {
+      imprimirConfig();
+    }
+  }
+
+  // ---- Adquisicion periodica ----
+  uint32_t t = millis();
+  if (t - t_prev >= periodo_ms) {
+    t_prev = t;
+
+    float v_adc  = leerVadc();
+    float v_out  = A_CAL * v_adc + B_CAL;            // bornera OUT (con divisor puesto)
+    float v_tia  = v_out * K_CARGA;                  // salida del amplificador sin carga
+    float v_neta = v_tia - v_dark;
+    float i_na   = v_neta / RF_MOHM * 1000.0;     // V / MOhm = uA -> x1000 = nA
+    int   est    = (v_out >= V_SAT_OUT) ? 1 : (v_adc < V_ADC_MIN ? 2 : 0);
+
+    buf[ibuf] = v_tia;
+    bufEst[ibuf] = est;
+    ibuf = (ibuf + 1) % NBUF;
+    if (ibuf == 0) buf_lleno = true;
+
+    Serial.printf("%lu,%.5f,%.5f,%.5f,%.5f,%.2f,%d\n",
+                  (unsigned long)t, v_adc, v_out, v_tia, v_neta, i_na, est);
+  }
+}
