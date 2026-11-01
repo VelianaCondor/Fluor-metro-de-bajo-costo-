@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fluorómetro de clorofila</title>
+<script src="/plotly.min.js"></script>
+<style>
+  :root { --bg:#f4f5f2; --card:#fff; --ink:#1d2421; --mut:#66706b; --line:#dde1dc;
+          --verde:#2f7d4f; --rojo:#b5302a; --ambar:#b7791f; --azul:#2563a8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui, "Segoe UI", sans-serif; background:var(--bg); color:var(--ink); }
+  header { display:flex; align-items:center; gap:12px; padding:12px 20px; background:#17201b; color:#e9efe9; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0 8px 0 0; font-weight:600; }
+  .pill { padding:3px 10px; border-radius:99px; font-size:12px; background:#33403a; }
+  .pill.ok { background:var(--verde); } .pill.mal { background:var(--rojo); } .pill.azul { background:var(--azul); }
+  main { display:grid; grid-template-columns: 310px 1fr; gap:14px; padding:14px; }
+  @media (max-width: 950px) { main { grid-template-columns: 1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .card h2 { font-size:12.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--mut); margin:0 0 8px; }
+  .col { display:flex; flex-direction:column; gap:14px; }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:14px; }
+  .grid3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:14px; }
+  @media (max-width: 1250px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+  button { font:inherit; padding:6px 10px; border-radius:7px; border:1px solid var(--line); background:#fff; cursor:pointer; width:100%; text-align:left; margin-top:6px; }
+  button.prim { background:var(--verde); color:#fff; border-color:var(--verde); font-weight:600; }
+  button.az { background:var(--azul); color:#fff; border-color:var(--azul); font-weight:600; }
+  button:hover { filter:brightness(.96); }
+  label { font-size:12px; color:var(--mut); display:block; margin-top:6px; }
+  input { font:inherit; width:100%; padding:5px 8px; border:1px solid var(--line); border-radius:6px; }
+  .fila { display:flex; gap:8px; align-items:flex-end; } .fila > * { flex:1; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric: tabular-nums; }
+  td { padding:3px 4px; border-bottom:1px solid #eef0ed; } td:last-child { text-align:right; font-weight:600; }
+  .aviso { background:#fff5e6; border-left:3px solid var(--ambar); padding:5px 8px; margin:4px 0; font-size:12.5px; }
+  .interp { background:#eef6f0; border-left:3px solid var(--verde); padding:5px 8px; margin:4px 0; font-size:12.5px; }
+  .fotos { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; }
+  .fotos figure { margin:0; } .fotos img { width:100%; image-rendering:pixelated; border-radius:6px; border:1px solid var(--line); background:#000; min-height:60px; }
+  .fotos figcaption { font-size:11px; color:var(--mut); text-align:center; }
+  #log { height:130px; overflow:auto; font:12px ui-monospace, monospace; color:var(--mut); white-space:pre-wrap; }
+  .big { font-size:24px; font-weight:700; } .mut { color:var(--mut); font-size:12px; }
+  .plot { height:280px; } .plot-s { height:220px; }
+  h3 { font-size:13px; margin:2px 0 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Fluorómetro de clorofila · procesamiento y visualización</h1>
+  <span id="enlace" class="pill">enlace: —</span>
+  <span id="red" class="pill">red: —</span>
+  <span id="muestra" class="pill">muestra —</span>
+  <span id="cam" class="pill">cámara: —</span>
+  <span id="led" class="pill">LED: apagado</span>
+</header>
+<main>
+  <div class="col">
+    <div class="card">
+      <h2>Muestra</h2>
+      <input id="etq" placeholder="etiqueta: p. ej. hoja 3, control">
+      <button onclick="cmd('nueva_muestra',{etiqueta:val('etq')})">+ Nueva muestra</button>
+    </div>
+    <div class="card">
+      <h2>Medición</h2>
+      <div class="fila"><div><label>Pulso de intensidad (ms)</label><input id="durI" type="number" value="2000" min="200" max="12000"></div></div>
+      <button class="prim" onclick="cmd('intensidad',{dur_ms:+val('durI'),foto:0})">Medir intensidad</button>
+      <button class="prim" onclick="cmd('foto',{dur_ms:+val('durI')})">Intensidad + foto de fluorescencia</button>
+      <button onclick="cmd('marcar_blanco').then(()=>cmd('intensidad',{dur_ms:+val('durI'),foto:0,blanco:1}))">Medir blanco (referencia no fluorescente)</button>
+      <div class="fila"><div><label>OJIP (ms)</label><input id="durO" type="number" value="1000" min="100" max="2000"></div></div>
+      <button class="az" onclick="cmd('ojip',{dur_ms:+val('durO'),led:1})">Medir OJIP (hoja adaptada a oscuridad)</button>
+      <button onclick="cmd('dark')">Guardar offset de oscuridad</button>
+      <button id="btnLed" onclick="toggleLed()">LED continuo (calentamiento / estabilidad)</button>
+    </div>
+    <div class="card">
+      <h2>Cámara (detrás del filtro de 650 nm)</h2>
+      <div class="fila"><div><label>Exposición AEC</label><input id="aec" type="number" value="300"></div>
+        <div><label>Ganancia</label><input id="gan" type="number" value="16"></div>
+        <div><label>t foto (ms)</label><input id="tf" type="number" value="1000"></div></div>
+      <button onclick="cmd('cam',{aec:+val('aec'),ganancia:+val('gan'),t_foto_ms:+val('tf')})">Aplicar</button>
+      <button onclick="cmd('campo_plano')">Usar última captura como campo plano</button>
+      <button onclick="cmd('borrar_campo_plano')">Quitar campo plano</button>
+    </div>
+    <div class="card">
+      <h2>Control térmico</h2>
+      <div class="fila">
+        <div><span class="big" id="T0">—</span><div class="mut">Inferior (LED) · <span id="u0">—</span></div></div>
+        <div><span class="big" id="T1">—</span><div class="mut">Superior (detector) · <span id="u1">—</span></div></div>
+      </div>
+      <div class="fila"><div><label>SP inferior</label><input id="sp0" type="number" value="27" step="0.5"></div>
+        <div><label>SP superior</label><input id="sp1" type="number" value="27" step="0.5"></div></div>
+      <button onclick="cmd('sp',{n:0,valor:+val('sp0')}).then(()=>cmd('sp',{n:1,valor:+val('sp1')}))">Aplicar set points</button>
+      <div id="avisoT"></div>
+    </div>
+    <div class="card"><h2>Registro</h2><div id="log"></div></div>
+  </div>
+
+  <div class="col">
+    <div class="grid2">
+      <div class="card"><h2>Intensidad: F(t) con el LED encendido</h2><div id="pInt" class="plot"></div></div>
+      <div class="card"><h2>Resultado de intensidad</h2><table id="tInt"></table><div id="aInt"></div></div>
+    </div>
+    <div class="card"><h2>Imagen de fluorescencia (cámara OV7670)</h2>
+      <div class="grid2">
+        <div class="fotos">
+          <figure><img id="iLuz" alt=""><figcaption>con LED</figcaption></figure>
+          <figure><img id="iOsc" alt=""><figcaption>oscuro</figcaption></figure>
+          <figure><img id="iMapa" alt=""><figcaption>mapa (luz − oscuro)</figcaption></figure>
+        </div>
+        <div><table id="tImg"></table><div id="aImg"></div></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h2>Curva OJIP (escala log)</h2><div id="pOjip" class="plot"></div></div>
+      <div class="card"><h2>JIP-test e interpretación</h2><table id="tOjip"></table><div id="aOjip"></div><div id="iOjip"></div></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h2>Fotodiodo en vivo (V neta, 60 s)</h2><div id="pPd" class="plot-s"></div></div>
+      <div class="card"><h2>Temperatura y ventiladores</h2><div id="pT" class="plot-s"></div></div>
+    </div>
+    <div class="card"><h2>Caracterización óptica (pruebas del área óptica)</h2>
+      <div class="grid3">
+        <div><h3>Estabilidad de la excitación</h3>
+          <div class="fila"><div><label>Ventana (s)</label><input id="vEst" type="number" value="60"></div>
+            <div><label>Criterio (%)</label><input id="cEst" type="number" value="1" step="0.1"></div></div>
+          <button onclick="calcEst()">Evaluar con la señal en vivo</button><div id="rEst" class="mut" style="margin-top:6px"></div></div>
+        <div><h3>Uniformidad (Urel)</h3>
+          <div class="fila"><div><label>x (mm)</label><input id="ux" type="number" value="0"></div><div><label>y (mm)</label><input id="uy" type="number" value="0"></div></div>
+          <button onclick="cmd('punto_uniformidad',{x:+val('ux'),y:+val('uy')}).then(()=>cmd('intensidad',{dur_ms:+val('durI'),foto:0}))">Medir punto</button>
+          <button onclick="cmd('borrar_uniformidad')">Borrar puntos</button>
+          <div id="pUni" style="height:170px"></div><div id="rUni" class="mut"></div></div>
+        <div><h3>Validación vs. espectrofluorómetro</h3>
+          <label>Lectura de referencia de esta muestra</label>
+          <div class="fila"><input id="ref" type="number" step="any"><button onclick="cmd('ref_validacion',{valor:+val('ref')})">Asociar a la última F</button></div>
+          <button onclick="cmd('borrar_validacion')">Borrar pares</button>
+          <div id="pVal" style="height:170px"></div><div id="rVal" class="mut"></div></div>
+      </div>
+    </div>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id), val = id => $(id).value;
+const L = {margin:{l:50,r:15,t:10,b:40}, font:{size:11}, paper_bgcolor:'#fff', plot_bgcolor:'#fff'};
+const CFG = {displaylogo:false, responsive:true};
+Plotly.newPlot('pPd', [{x:[], y:[], mode:'lines', line:{color:'#2563a8', width:1.5}}], {...L, xaxis:{title:'tiempo (s)'}, yaxis:{title:'V'}}, CFG);
+Plotly.newPlot('pOjip', [], {...L, xaxis:{type:'log', title:'tiempo (s)'}, yaxis:{title:'F (V)'}}, CFG);
+Plotly.newPlot('pInt', [], {...L, xaxis:{title:'tiempo desde LED encendido (s)'}, yaxis:{title:'F (V)'}}, CFG);
+Plotly.newPlot('pT', [
+  {x:[],y:[],name:'T inferior',line:{color:'#b5302a'}}, {x:[],y:[],name:'T superior',line:{color:'#b7791f'}},
+  {x:[],y:[],name:'PWM inf %',yaxis:'y2',line:{color:'#2f7d4f',width:1}}, {x:[],y:[],name:'PWM sup %',yaxis:'y2',line:{color:'#2563a8',width:1}}],
+  {...L, margin:{l:45,r:45,t:10,b:30}, yaxis:{title:'°C'}, yaxis2:{title:'PWM %',overlaying:'y',side:'right',range:[0,105]}, legend:{orientation:'h', y:-0.3}}, CFG);
+Plotly.newPlot('pUni', [], {...L, margin:{l:35,r:10,t:5,b:30}}, CFG);
+Plotly.newPlot('pVal', [], {...L, margin:{l:40,r:10,t:5,b:30}}, CFG);
+
+let t0 = null, ledOn = false;
+function log(s){ const d=$('log'); d.textContent = new Date().toLocaleTimeString()+'  '+s+'\n'+d.textContent.slice(0,6000); }
+async function cmd(c, extra={}){
+  const r = await fetch('/api/cmd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:c,...extra})});
+  const j = await r.json(); log(`→ ${c} ${Object.keys(extra).length?JSON.stringify(extra):''} ${j.ok?'':'('+(j.error||'sin enlace')+')'}`); return j;
+}
+function toggleLed(){ cmd('led',{on: ledOn?0:1}); }
+async function calcEst(){
+  const r = await (await fetch(`/api/estabilidad?ventana_s=${val('vEst')}&criterio_pct=${val('cEst')}`)).json();
+  $('rEst').innerHTML = r.variacion_pct===undefined ? 'Sin datos suficientes' :
+    `Variación en ${r.ventana_s} s: <b>${r.variacion_pct.toFixed(2)} %</b> → ${r.estable?'<b style="color:#2f7d4f">estable</b>':'<b style="color:#b5302a">aún no estable</b>'} (registro de ${r.t_s.toFixed(0)} s)`;
+}
+const f3 = x => (x===null||x===undefined) ? '—' : (Math.abs(x)>=100 ? x.toFixed(0) : x.toFixed(3));
+const filas = rows => rows.map(([a,b])=>`<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+const avisos = a => (a||[]).map(x=>`<div class="aviso">⚠ ${x}</div>`).join('');
+
+function onInt(e){
+  const p = e.param||{}, w = p.ventana_s||[0,0];
+  Plotly.react('pInt', [{x:e.t, y:e.v, mode:'lines', line:{color: e.blanco?'#66706b':'#b5302a'}, name:'F(t)'}],
+    {...L, xaxis:{title:'tiempo desde LED encendido (s)'}, yaxis:{title:'F (V)'}, showlegend:false,
+     shapes:[{type:'rect', xref:'x', yref:'paper', x0:w[0], x1:w[1], y0:0, y1:1, fillcolor:'#2f7d4f', opacity:.08, line:{width:0}},
+             ...(e.foto?[{type:'line', xref:'x', yref:'paper', x0:e.t_foto_ms/1000, x1:e.t_foto_ms/1000, y0:0, y1:1, line:{color:'#2563a8', dash:'dot'}}]:[])]}, CFG);
+  $('tInt').innerHTML = filas([[e.blanco?'<b>Blanco</b> (referencia)':'F (ventana sombreada)', f3(p.F)+' V'],
+    ...(p.F_neta!==undefined?[['F neta (F − blanco)', f3(p.F_neta)+' V']]:[]), ['RSD dentro de la ventana', f3(p.RSD_pct)+' %'],
+    ['Deriva en la ventana', f3(p.deriva_pct)+' %'], ['Pico / t pico', `${f3(p.F_pico)} V / ${f3(p.t_pico_s)} s`],
+    ...(p.F_durante_foto!==undefined?[['F durante la foto', f3(p.F_durante_foto)+' V']]:[])]);
+  $('aInt').innerHTML = avisos(e.avisos);
+  log(`Intensidad #${e.id}${e.blanco?' (blanco)':''}: F = ${f3(p.F)} V`);
+}
+function onImg(e){
+  const q = u => u ? u+'?'+Date.now() : '';
+  $('iLuz').src = q(e.url_luz); $('iOsc').src = q(e.url_oscuro); $('iMapa').src = q(e.url_mapa);
+  $('tImg').innerHTML = e.ok ? filas([['Área con fluorescencia', (e.fraccion_area*100).toFixed(1)+' %'], ['Media (niveles)', f3(e.media)],
+     ['CV espacial', f3(e.CV_pct)+' %'], ['P5 / mediana / P95', `${f3(e.p5)} / ${f3(e.mediana)} / ${f3(e.p95)}`],
+     ['Zonas < 60 % de la mediana', f3(e.zonas_bajas_pct)+' %'], ['Nivel del cuadro oscuro', f3(e.nivel_oscuro)]]) + `<tr><td colspan=2 class="mut">${e.correccion}</td></tr>`
+     : `<tr><td class="mut">${e.correccion||''}</td></tr>`;
+  $('aImg').innerHTML = avisos(e.avisos);
+  log(`Captura #${e.captura_id} procesada (muestra ${e.muestra})`);
+}
+const NOMBRES = {F0:'F0 (50 µs)', FJ:'FJ (2 ms)', FI:'FI (30 ms)', FM:'FM', Fv_Fm:'Fv/Fm', VJ:'VJ', M0:'M0 (1/ms)', PIabs:'PIabs', SNR:'SNR'};
+function onOjip(e){
+  const tr = [{x:e.t, y:e.v, mode:'lines+markers', marker:{size:3}, line:{color:'#2f7d4f'}}];
+  if (e.marcas) { const k=Object.keys(e.marcas);
+    tr.push({x:k.map(n=>e.marcas[n][0]), y:k.map(n=>e.marcas[n][1]), text:k, mode:'markers+text', textposition:'top center', marker:{size:8,color:'#b5302a'}}); }
+  Plotly.react('pOjip', tr, {...L, xaxis:{type:'log', title:'tiempo (s)'}, yaxis:{title:'F (V)'}, showlegend:false}, CFG);
+  $('tOjip').innerHTML = filas(Object.entries(NOMBRES).filter(([k])=>k in (e.param||{})).map(([k,n])=>[n, f3(e.param[k])]))
+    + `<tr><td>Muestreo</td><td>${(e.cab.fs_hz/1000).toFixed(1)} kS/s</td></tr>`;
+  $('aOjip').innerHTML = avisos(e.avisos);
+  $('iOjip').innerHTML = (e.interpretacion||[]).map(a=>`<div class="interp">${a}</div>`).join('');
+}
+function onCarac(e){
+  const u = e.uniformidad, v = e.validacion, r = e.repetibilidad;
+  Plotly.react('pUni', u.puntos.length ? [{x:u.puntos.map(p=>p.x), y:u.puntos.map(p=>p.y), text:u.puntos.map(p=>p.F.toFixed(3)), mode:'markers+text', textposition:'middle right',
+     marker:{size:14, color:u.puntos.map(p=>p.F), colorscale:'Inferno', showscale:false}}] : [], {...L, margin:{l:35,r:10,t:10,b:30}, xaxis:{title:'x (mm)'}, yaxis:{title:'y (mm)', scaleanchor:'x'}}, CFG);
+  $('rUni').innerHTML = u.Urel_pct!==undefined ? `n = ${u.n} · Urel = <b>${u.Urel_pct.toFixed(1)} %</b> · CV = ${u.CV_pct.toFixed(1)} %` : `${u.n} punto(s)`;
+  const xs = v.pares.map(p=>p.ref);
+  const trv = v.pares.length ? [{x:xs, y:v.pares.map(p=>p.F), mode:'markers', marker:{color:'#2563a8'}}] : [];
+  if (v.m!==undefined) { const a=Math.min(...xs), b=Math.max(...xs); trv.push({x:[a,b], y:[v.m*a+v.b, v.m*b+v.b], mode:'lines', line:{color:'#b5302a'}}); }
+  Plotly.react('pVal', trv, {...L, margin:{l:40,r:10,t:5,b:30}, showlegend:false, xaxis:{title:'referencia'}, yaxis:{title:'F prototipo (V)'}}, CFG);
+  $('rVal').innerHTML = (v.R2!==undefined ? `n = ${v.n} · F = ${v.m.toFixed(4)}·ref + ${v.b.toFixed(4)} · R² = <b>${v.R2.toFixed(3)}</b> ${v.cumple_R2?'(≥ 0.95)':'(< 0.95)'}` : `${v.n} par(es); se necesitan ≥ 3`)
+    + `<br>Repetibilidad de esta muestra: ${r.RSD_pct!==undefined && r.RSD_pct!==null ? `n = ${r.n}, RSD = <b>${r.RSD_pct.toFixed(2)} %</b> ${r.cumple_RSD?'(< 5 %)':''}` : `${r.n} medición(es)`}`
+    + `<br>Blanco: ${e.blanco!==null && e.blanco!==undefined ? f3(e.blanco)+' V' : 'no medido'} · Campo plano: ${e.campo_plano?'sí':'no'}`;
+}
+function onPd(e){
+  if (t0===null && e.t.length) t0 = e.t[0];
+  const x = e.t.map(t=>(t-t0)/1000);
+  Plotly.extendTraces('pPd', {x:[x], y:[e.vn]}, [0], 3000);
+  const xl = x[x.length-1]; if (xl!==undefined) Plotly.relayout('pPd', {'xaxis.range':[Math.max(0,xl-60), xl]});
+}
+function onTerm(e){
+  const x=[(e.t-(t0??e.t))/1000];
+  Plotly.extendTraces('pT', {x:[x,x,x,x], y:[[e.T[0]],[e.T[1]],[e.u[0]],[e.u[1]]]}, [0,1,2,3], 900);
+  for (const i of [0,1]) { $('T'+i).textContent = e.ok[i] ? e.T[i].toFixed(1)+' °C' : 'falla'; $('u'+i).textContent = `PWM ${e.u[i].toFixed(0)} %`; }
+  $('avisoT').innerHTML = (e.sp_inalc[0]||e.sp_inalc[1]) ? '<div class="aviso">⚠ Set point inalcanzable: el aire que entra está más caliente que el set point</div>' : '';
+}
+function conectar(){
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = m => { const e = JSON.parse(m.data);
+    switch(e.ev){
+      case 'pd': onPd(e); break; case 'term': onTerm(e); break; case 'ojip': onOjip(e); break; case 'img': onImg(e); break;
+      case 'int': onInt(e); break; case 'carac': onCarac(e); break;
+      case 'enlace': $('enlace').textContent='enlace: '+e.estado; $('enlace').className='pill '+(/usb|wifi/.test(e.estado)?'ok':'mal'); log('Enlace: '+e.estado); break;
+      case 'muestra': $('muestra').textContent=`muestra ${e.n}${e.etiqueta?' · '+e.etiqueta:''}`; break;
+      case 'estado': $('cam').textContent = e.cam ? `cámara: vista hace ${(e.cam_hace_ms/1000).toFixed(0)} s` : 'cámara: no vista';
+                     $('cam').className = 'pill ' + (e.cam && e.cam_hace_ms < 60000 ? 'ok' : '');
+                     $('red').textContent = `red: ${e.wifi==='ap'?'propia del S3':'router'} ${e.ip||''}`;
+                     ledOn = !!e.led; $('led').textContent = 'LED: ' + (ledOn?'ENCENDIDO':'apagado'); $('led').className = 'pill ' + (ledOn?'azul':''); break;
+      case 'log': log('S3: '+e.texto); break;
+      case 'resp': if(!e.ok) log('S3 no reconoce el comando '+e.cmd); break;
+    }};
+  ws.onclose = () => { $('enlace').textContent='página desconectada del servidor'; setTimeout(conectar, 2000); };
+}
+conectar();
+</script>
+</body>
+</html>
