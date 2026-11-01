@@ -196,17 +196,3 @@ Salida CSV: `t_ms, V_adc, V_out, V_tia, V_neta, I_nA, est`
    - `d` guardó un offset incorrecto → corregido con el buffer del último segundo.
 9. **Calibración**: con registros simultáneos (31-oct) se obtuvo V_out = 1.9894·V_adc + 0.0488 V, se confirmó R6 ≈ 1 kΩ (K_CARGA = 1.05) y se encontró la zona muerta del ADC bajo ~0.05 V en OUT. La lectura de 4.814 V del 23-oct se descartó.
 10. **Rf = 1 MΩ** (SMD 1004): 1 V en el amplificador = 1 µA.
-
----
-
-## 6. Pendientes
-
-- [x] Leer **Rf**: código 1004 = **1 MΩ**.
-- [x] Oscuridad con el multímetro: **30 mV en OUT** (fotodiodo tapado).
-- [ ] Repetir en **oscuridad total** (caja cerrada) para saber si los 30 mV son luz filtrada u offset de la placa.
-- [x] Calibración de dos puntos simultánea (31-oct).
-- [ ] Repetir la calibración con **luz fija sostenida ≥ 5 s en cada nivel** (~0.5, 1, 2, 3, 4 V) para afinar los puntos intermedios.
-- [ ] Si se necesita medir por debajo de ~50 nA: sacar la señal de la zona muerta (resistencia de polarización al pin o ADC externo, ver sección 4c).
-- [ ] Instalar los diodos de protección en el nodo del ADC.
-- [ ] Construir una caja oscura con fuente de luz en DC para mediciones repetibles.
-- [ ] Decidir si se pasa a R1 = 8.2 kΩ (solo después de los dos puntos anteriores).
