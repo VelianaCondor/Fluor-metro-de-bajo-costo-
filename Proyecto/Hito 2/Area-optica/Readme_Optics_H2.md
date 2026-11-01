@@ -55,10 +55,6 @@ LED azul (2 W) → Filtro azul 450 nm → Guía tronco-cónica → Hoja
    - Medición del prototipo: voltaje/corriente del fotodiodo y media de píxeles rojos de la OV7670, con exposición controlada del LED (evitar efectos de Kautsky y fatiga fotoquímica).
    - Criterios: regresión lineal `y = m·x + b` con **R² ≥ 0.95**; repetibilidad con 10 mediciones consecutivas y **RSD < 5 %**.
 
-## Nota de consistencia del documento original
-
-El documento adopta el fotodiodo **2DU10** (secciones 4.5 y diagramas), pero las secciones 5.2, 6.1, 7.3.5 y la conclusión (8) aún mencionan el **BPW34**. Conviene unificar la referencia al detector en la próxima revisión.
-
 ## Conclusión
 
 Se sustituye el láser por un LED azul para iluminar un área foliar mayor y reducir la sensibilidad a la alineación, con guía reflectiva tronco-cónica, filtrado espectral de excitación y emisión, acondicionamiento por transimpedancia, cámara OV7670 complementaria y recinto contra luz ambiental. Las prestaciones finales dependerán de las mediciones de caracterización y validación descritas.
